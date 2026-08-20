@@ -7,7 +7,7 @@ from enum import Enum
 from fractions import Fraction
 import json
 import math
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from uuid import UUID
 
 import pytest
@@ -205,8 +205,8 @@ class NonJsonBrokenStatusTool(BaseTool):
     name = "non_json_broken_status_tool"
     capability = "video_generation"
     provider = "broken_provider"
-    best_for = [Path("docs/provider.md"), Decimal("1.25")]
-    dependencies = [Path(".env")]
+    best_for = [PureWindowsPath(r"docs\provider.md"), Decimal("1.25")]
+    dependencies = [PureWindowsPath(".env")]
     provider_matrix = {"fallback": {"cost": Decimal("0.10"), "score": math.nan}}
     quality_score = math.nan
     user_visible_verification = [b"listen"]
@@ -297,10 +297,10 @@ class NonJsonRichInfoTool:
     def get_info(self) -> dict:
         return {
             "name": "non_json_rich_info_tool",
-            "provider": Path("providers/local"),
+            "provider": PureWindowsPath(r"providers\local"),
             "capability": "video_generation",
             "stability": ToolStability.PRODUCTION,
-            "best_for": [Path("docs/provider.md")],
+            "best_for": [PureWindowsPath(r"docs\provider.md")],
             "supports": {"quality_score": math.inf, "price": Decimal("0.10")},
             "agent_skills": ("text-to-speech",),
         }
@@ -344,15 +344,15 @@ class NonJsonRegistryInfoTool(BaseTool):
             "version": "0.1.0",
             "tier": "core",
             "capability": "video_generation",
-            "provider": Path("providers/raw"),
+            "provider": PureWindowsPath(r"providers\raw"),
             "stability": ToolStability.PRODUCTION,
             "status": "available",
             "execution_mode": "sync",
             "determinism": "deterministic",
             "runtime": "local",
             "module_path": __name__,
-            "usage_location": Path("tools/raw_provider.py"),
-            "dependencies": [Path(".env")],
+            "usage_location": PureWindowsPath(r"tools\raw_provider.py"),
+            "dependencies": [PureWindowsPath(".env")],
             "install_instructions": "",
             "capabilities": [],
             "input_schema": {"type": "object", "properties": {}},
@@ -360,7 +360,7 @@ class NonJsonRegistryInfoTool(BaseTool):
             "artifact_schema": {},
             "progress_schema": None,
             "supports": {"quality_score": math.inf, "price": Decimal("0.10")},
-            "best_for": [Path("docs/provider.md")],
+            "best_for": [PureWindowsPath(r"docs\provider.md")],
             "not_good_for": [],
             "provider_matrix": {"fallback": {"score": math.nan}},
             "resource_profile": {
@@ -796,10 +796,16 @@ def test_input_dependent_deterministic_tools_declare_idempotency_fields():
 
 def test_idempotency_key_accepts_path_values_like_string_paths():
     tool = PathIdempotencyTool()
-
-    assert tool.idempotency_key({"output_path": Path("projects/demo/renders/final.mp4")}) == (
-        tool.idempotency_key({"output_path": "projects/demo/renders/final.mp4"})
+    expected = tool.idempotency_key(
+        {"output_path": "projects/demo/renders/final.mp4"}
     )
+
+    assert tool.idempotency_key(
+        {"output_path": Path("projects/demo/renders/final.mp4")}
+    ) == expected
+    assert tool.idempotency_key(
+        {"output_path": PureWindowsPath(r"projects\demo\renders\final.mp4")}
+    ) == expected
 
 
 def test_idempotency_key_canonicalizes_nested_non_json_payloads():
@@ -808,8 +814,11 @@ def test_idempotency_key_canonicalizes_nested_non_json_payloads():
     assert tool.idempotency_key(
         {
             "payload": {
-                Path("assets/reference.png"): Decimal("1.25"),
-                "clip": {1: "one", "two": Path("renders/out.mp4")},
+                PureWindowsPath(r"assets\reference.png"): Decimal("1.25"),
+                "clip": {
+                    1: "one",
+                    "two": PureWindowsPath(r"renders\out.mp4"),
+                },
             }
         }
     ) == tool.idempotency_key(
@@ -826,10 +835,12 @@ def test_tool_result_to_dict_is_json_safe_for_path_values():
     result = ToolResult(
         success=True,
         data={
-            "output_path": Path("projects/demo/renders/final.mp4"),
-            "nested": {"preview_path": Path("projects/demo/preview.mp4")},
+            "output_path": PureWindowsPath(r"projects\demo\renders\final.mp4"),
+            "nested": {
+                "preview_path": PureWindowsPath(r"projects\demo\preview.mp4")
+            },
         },
-        artifacts=[Path("projects/demo/renders/final.mp4")],
+        artifacts=[PureWindowsPath(r"projects\demo\renders\final.mp4")],
     )
 
     payload = result.to_dict()
@@ -910,6 +921,7 @@ def test_tool_result_to_dict_serializes_uuid_and_pure_path_values():
         data={
             "asset_id": UUID("12345678-1234-5678-1234-567812345678"),
             "relative_path": PurePosixPath("projects/demo/renders/final.mp4"),
+            "windows_drive_path": PureWindowsPath(r"C:\projects\demo\final.mp4"),
         },
     )
 
@@ -917,6 +929,7 @@ def test_tool_result_to_dict_serializes_uuid_and_pure_path_values():
 
     assert payload["data"]["asset_id"] == "12345678-1234-5678-1234-567812345678"
     assert payload["data"]["relative_path"] == "projects/demo/renders/final.mp4"
+    assert payload["data"]["windows_drive_path"] == "C:/projects/demo/final.mp4"
     json.dumps(payload, allow_nan=False)
 
 

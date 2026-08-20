@@ -120,6 +120,8 @@ def _coerce_tool_status(value: Any) -> ToolStatus:
 
 
 def _json_safe_key(value: Any) -> Any:
+    if isinstance(value, PurePath):
+        return value.as_posix()
     if isinstance(value, str):
         return value
     if isinstance(value, float) and not math.isfinite(value):
@@ -129,7 +131,7 @@ def _json_safe_key(value: Any) -> Any:
 
 def _json_safe(value: Any) -> Any:
     if isinstance(value, PurePath):
-        return str(value)
+        return value.as_posix()
     if isinstance(value, UUID):
         return str(value)
     if isinstance(value, Decimal):
