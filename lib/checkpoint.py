@@ -1014,7 +1014,7 @@ def write_checkpoint(
     # reference back into relevant artifacts so downstream consumers can find it.
     if "decision_log" in artifacts and isinstance(artifacts["decision_log"], dict):
         _merge_decision_log(pipeline_dir, project_id, artifacts["decision_log"])
-        log_ref = str(_decision_log_path(pipeline_dir, project_id))
+        log_ref = _decision_log_path(pipeline_dir, project_id).as_posix()
 
         # Write decision_log_ref into proposal/render artifacts when present.
         for artifact_key in ("proposal_packet", "production_proposal", "render_report"):

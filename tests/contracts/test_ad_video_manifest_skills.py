@@ -6,7 +6,7 @@ import json
 import re
 import shutil
 from copy import deepcopy
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -1931,6 +1931,47 @@ def test_ad_video_production_proposal_checkpoint_records_decision_log_ref(tmp_pa
 
     proposal = checkpoint["artifacts"]["production_proposal"]
     assert proposal["decision_log_ref"].endswith("ad-proposal-ref/decision_log.json")
+
+
+def test_ad_video_decision_log_ref_normalizes_windows_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import lib.checkpoint as checkpoint_module
+
+    monkeypatch.setattr(
+        checkpoint_module,
+        "_merge_decision_log",
+        lambda pipeline_dir, project_id, decision_log: None,
+    )
+    monkeypatch.setattr(
+        checkpoint_module,
+        "_decision_log_path",
+        lambda pipeline_dir, project_id: PureWindowsPath(
+            rf"C:\projects\{project_id}\decision_log.json"
+        ),
+    )
+
+    checkpoint_path = checkpoint_module.write_checkpoint(
+        tmp_path,
+        "ad-proposal-ref",
+        "proposal",
+        "in_progress",
+        {
+            "production_proposal": _minimal_production_proposal(),
+            "decision_log": {
+                "version": "1.0",
+                "project_id": "ad-proposal-ref",
+                "decisions": [],
+            },
+        },
+        pipeline_type="ad-video",
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+
+    assert checkpoint["artifacts"]["production_proposal"]["decision_log_ref"] == (
+        "C:/projects/ad-proposal-ref/decision_log.json"
+    )
 
 
 def test_ad_video_publish_declares_artifacts_needed_for_final_safety_review() -> None:
