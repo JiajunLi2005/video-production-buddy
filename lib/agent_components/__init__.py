@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any, Iterable
 
 import yaml
@@ -748,7 +748,12 @@ def _hash_tree(root: Path) -> dict[str, Any]:
         raise ComponentError(f"source tree is not a directory: {root}")
     files = []
     tree_hasher = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file() and not _is_ignored_component_file(p, root)):
+    component_files = (
+        path
+        for path in root.rglob("*")
+        if path.is_file() and not _is_ignored_component_file(path, root)
+    )
+    for path in sorted(component_files, key=lambda item: _component_tree_sort_key(item, root)):
         rel = path.relative_to(root).as_posix()
         digest = _sha256_file(path)
         mode = _locked_file_mode(path)
@@ -757,6 +762,11 @@ def _hash_tree(root: Path) -> dict[str, Any]:
         tree_hasher.update(mode.encode("ascii") + b"\0")
         tree_hasher.update(digest.encode("ascii") + b"\0")
     return {"treeSha256": f"sha256:{tree_hasher.hexdigest()}", "files": files}
+
+
+def _component_tree_sort_key(path: PurePath, root: PurePath) -> tuple[str, ...]:
+    """Return a case-sensitive path-parts key independent of host path flavor."""
+    return path.relative_to(root).parts
 
 
 def _is_ignored_component_file(path: Path, root: Path) -> bool:
