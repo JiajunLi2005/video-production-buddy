@@ -396,7 +396,11 @@ def test_git_mirror_clone_retries_transient_failure(
 
     upstream = tmp_path / "upstream"
     _write_skill(upstream / "skills", "demo", "from retry")
-    subprocess.run(["git", "init", str(upstream)], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        ["git", "init", "--initial-branch=master", str(upstream)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
     subprocess.run(["git", "-C", str(upstream), "config", "user.email", "test@example.com"], check=True)
     subprocess.run(["git", "-C", str(upstream), "config", "user.name", "Test"], check=True)
     subprocess.run(["git", "-C", str(upstream), "add", "."], check=True)
@@ -456,7 +460,11 @@ def test_git_source_fetches_shared_source_once_per_lock_run(tmp_path: Path, monk
     upstream = tmp_path / "upstream"
     _write_skill(upstream / "skills", "first", "from git")
     _write_skill(upstream / "skills", "second", "from git")
-    subprocess.run(["git", "init", str(upstream)], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        ["git", "init", "--initial-branch=master", str(upstream)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
     subprocess.run(["git", "-C", str(upstream), "config", "user.email", "test@example.com"], check=True)
     subprocess.run(["git", "-C", str(upstream), "config", "user.name", "Test"], check=True)
     subprocess.run(["git", "-C", str(upstream), "add", "."], check=True)
@@ -510,7 +518,11 @@ def test_frozen_offline_verify_uses_locked_git_commit_after_ref_moves(tmp_path: 
 
     upstream = tmp_path / "upstream"
     _write_skill(upstream / "skills", "demo", "from git")
-    subprocess.run(["git", "init", str(upstream)], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        ["git", "init", "--initial-branch=master", str(upstream)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
     subprocess.run(["git", "-C", str(upstream), "config", "user.email", "test@example.com"], check=True)
     subprocess.run(["git", "-C", str(upstream), "config", "user.name", "Test"], check=True)
     subprocess.run(["git", "-C", str(upstream), "add", "."], check=True)
@@ -575,7 +587,11 @@ def test_update_lock_can_refresh_one_component_without_fetching_unrelated_source
     _write_skill(first_upstream / "skills", "first", "from first")
     _write_skill(second_upstream / "skills", "second", "from second")
     for upstream in (first_upstream, second_upstream):
-        subprocess.run(["git", "init", str(upstream)], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["git", "init", "--initial-branch=master", str(upstream)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
         subprocess.run(["git", "-C", str(upstream), "config", "user.email", "test@example.com"], check=True)
         subprocess.run(["git", "-C", str(upstream), "config", "user.name", "Test"], check=True)
         subprocess.run(["git", "-C", str(upstream), "add", "."], check=True)
