@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import jsonschema
 import pytest
@@ -110,6 +110,42 @@ sources:
     raw = lock_path.read_text(encoding="utf-8")
     assert json.loads(raw) == lock
     assert raw.endswith("\n")
+
+
+def test_component_tree_sort_key_is_portable_on_windows() -> None:
+    from lib.agent_components import _component_tree_sort_key
+
+    root = PureWindowsPath("C:/component")
+    paths = [
+        root / "references" / "guide.md",
+        root / "references.md",
+        root / "SKILL.md",
+        root / "examples" / "Demo.md",
+    ]
+
+    sorted_paths = sorted(paths, key=lambda path: _component_tree_sort_key(path, root))
+
+    assert [path.relative_to(root).as_posix() for path in sorted_paths] == [
+        "SKILL.md",
+        "examples/Demo.md",
+        "references/guide.md",
+        "references.md",
+    ]
+
+
+def test_checked_in_local_component_tree_hash_matches_lock() -> None:
+    from lib.agent_components import _hash_tree
+
+    repo_root = Path(__file__).resolve().parents[2]
+    lock = json.loads(
+        (repo_root / ".agents" / "components.lock.json").read_text(encoding="utf-8")
+    )
+    entry = lock["components"]["agents"]
+
+    actual = _hash_tree(repo_root / entry["sourcePath"])
+
+    assert actual["treeSha256"] == entry["treeSha256"]
+    assert actual["files"] == entry["files"]
 
 
 def test_load_lock_rejects_non_strict_json(tmp_path: Path) -> None:
