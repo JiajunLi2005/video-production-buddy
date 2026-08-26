@@ -23,7 +23,7 @@ from tools.base_tool import (
     ToolStability,
     ToolTier,
 )
-from tools.output_paths import require_explicit_output_path
+from tools.output_paths import portable_output_path, require_explicit_output_path
 
 
 def _ffconcat_quote(path: str) -> str:
@@ -188,17 +188,19 @@ class VideoTrimmer(BaseTool):
 
         self.run_command(cmd)
 
+        output_ref = portable_output_path(output_path)
+
         return ToolResult(
             success=True,
             data={
                 "operation": "cut",
                 "input": str(input_path),
-                "output": str(output_path),
-                "output_path": str(output_path),
+                "output": output_ref,
+                "output_path": output_ref,
                 "start_seconds": start_s,
                 "end_seconds": end_s,
             },
-            artifacts=[str(output_path)],
+            artifacts=[output_ref],
         )
 
     def _speed(self, inputs: dict[str, Any]) -> ToolResult:
@@ -234,16 +236,18 @@ class VideoTrimmer(BaseTool):
 
         self.run_command(cmd)
 
+        output_ref = portable_output_path(output_path)
+
         return ToolResult(
             success=True,
             data={
                 "operation": "speed",
                 "input": str(input_path),
-                "output": str(output_path),
-                "output_path": str(output_path),
+                "output": output_ref,
+                "output_path": output_ref,
                 "speed_factor": factor,
             },
-            artifacts=[str(output_path)],
+            artifacts=[output_ref],
         )
 
     def _concat(self, inputs: dict[str, Any]) -> ToolResult:
@@ -305,15 +309,17 @@ class VideoTrimmer(BaseTool):
             ]
             self.run_command(cmd)
 
+            output_ref = portable_output_path(output_path)
+
             return ToolResult(
                 success=True,
                 data={
                     "operation": "concat",
                     "segment_count": len(segments),
-                    "output": str(output_path),
-                    "output_path": str(output_path),
+                    "output": output_ref,
+                    "output_path": output_ref,
                 },
-                artifacts=[str(output_path)],
+                artifacts=[output_ref],
             )
         finally:
             # Clean up temp segment files (but not the originals)
