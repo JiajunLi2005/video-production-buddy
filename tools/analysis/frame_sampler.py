@@ -22,7 +22,10 @@ from tools.base_tool import (
     ToolStability,
     ToolTier,
 )
-from tools.output_paths import require_explicit_project_media_directory_destination
+from tools.output_paths import (
+    portable_output_path,
+    require_explicit_project_media_directory_destination,
+)
 
 
 STRATEGIES = ["interval", "count", "timestamps", "scene_guided"]
@@ -191,9 +194,9 @@ class FrameSampler(BaseTool):
                 "strategy": strategy,
                 "frame_count": len(frames),
                 "frames": frames,
-                "output_dir": str(output_dir),
+                "output_dir": portable_output_path(output_dir),
             },
-            artifacts=[str(output_dir)],
+            artifacts=[portable_output_path(output_dir)],
             duration_seconds=round(elapsed, 2),
         )
 
@@ -278,7 +281,7 @@ class FrameSampler(BaseTool):
 
             if output_file.exists():
                 frames.append({
-                    "path": str(output_file),
+                    "path": portable_output_path(output_file),
                     "timestamp_seconds": ts,
                     "index": i,
                 })
@@ -354,7 +357,7 @@ class FrameSampler(BaseTool):
         pattern = f"frame_*.{fmt}"
         for i, path in enumerate(sorted(output_dir.glob(pattern))):
             frames.append({
-                "path": str(path),
+                "path": portable_output_path(path),
                 "timestamp_seconds": round(i * interval, 3),
                 "index": i,
             })

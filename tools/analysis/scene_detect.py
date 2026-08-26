@@ -21,7 +21,7 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
-from tools.output_paths import require_explicit_project_sidecar_path
+from tools.output_paths import portable_output_path, require_explicit_project_sidecar_path
 
 
 METHODS = ["content", "threshold", "adaptive"]
@@ -171,10 +171,10 @@ class SceneDetect(BaseTool):
                 "scene_count": len(scenes),
                 "scenes": scenes,
                 "method": "pyscenedetect" if self._has_pyscenedetect() else "ffmpeg",
-                "output": str(output_path),
-                "output_path": str(output_path),
+                "output": portable_output_path(output_path),
+                "output_path": portable_output_path(output_path),
             },
-            artifacts=[str(output_path)],
+            artifacts=[portable_output_path(output_path)],
             duration_seconds=round(elapsed, 2),
         )
 

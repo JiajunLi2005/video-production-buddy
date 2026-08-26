@@ -24,7 +24,10 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
-from tools.output_paths import require_explicit_project_sidecar_destination
+from tools.output_paths import (
+    portable_output_path,
+    require_explicit_project_sidecar_destination,
+)
 
 
 MODEL_SIZES = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
@@ -271,8 +274,8 @@ class Transcriber(BaseTool):
         output_path = output_dir / f"{input_path.stem}_transcript.json"
 
         result_data = {
-            "output_dir": str(output_dir),
-            "transcript_path": str(output_path),
+            "output_dir": portable_output_path(output_dir),
+            "transcript_path": portable_output_path(output_path),
             "segments": segments,
             "word_timestamps": word_timestamps,
             "language": detected_language,
@@ -294,7 +297,7 @@ class Transcriber(BaseTool):
         return ToolResult(
             success=True,
             data=result_data,
-            artifacts=[str(output_path)],
+            artifacts=[portable_output_path(output_path)],
             duration_seconds=round(elapsed, 2),
         )
 

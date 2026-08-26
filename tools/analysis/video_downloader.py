@@ -24,7 +24,10 @@ from tools.base_tool import (
     ToolTier,
     ToolRuntime,
 )
-from tools.output_paths import require_explicit_project_source_media_destination
+from tools.output_paths import (
+    portable_output_path,
+    require_explicit_project_source_media_destination,
+)
 
 
 FORMATS = ["video", "audio_only", "subtitles_only", "metadata_only"]
@@ -261,7 +264,7 @@ class VideoDownloader(BaseTool):
                     "subtitle_path": None,
                     "metadata": metadata,
                     "platform": platform,
-                    "output_dir": str(output_dir),
+                    "output_dir": portable_output_path(output_dir),
                 },
                 duration_seconds=round(time.time() - start, 2),
             )
@@ -289,17 +292,34 @@ class VideoDownloader(BaseTool):
             )
 
         elapsed = time.time() - start
-        artifacts = [p for p in [video_path, audio_path, subtitle_path] if p]
+        portable_video_path = (
+            portable_output_path(Path(video_path)) if video_path else None
+        )
+        portable_audio_path = (
+            portable_output_path(Path(audio_path)) if audio_path else None
+        )
+        portable_subtitle_path = (
+            portable_output_path(Path(subtitle_path)) if subtitle_path else None
+        )
+        artifacts = [
+            path
+            for path in [
+                portable_video_path,
+                portable_audio_path,
+                portable_subtitle_path,
+            ]
+            if path
+        ]
 
         return ToolResult(
             success=True,
             data={
-                "video_path": video_path,
-                "audio_path": audio_path,
-                "subtitle_path": subtitle_path,
+                "video_path": portable_video_path,
+                "audio_path": portable_audio_path,
+                "subtitle_path": portable_subtitle_path,
                 "metadata": metadata,
                 "platform": platform,
-                "output_dir": str(output_dir),
+                "output_dir": portable_output_path(output_dir),
             },
             artifacts=artifacts,
             duration_seconds=round(elapsed, 2),

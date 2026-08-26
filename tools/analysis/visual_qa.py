@@ -24,7 +24,10 @@ from tools.base_tool import (
     ToolStability,
     ToolTier,
 )
-from tools.output_paths import require_explicit_project_media_directory_destination
+from tools.output_paths import (
+    portable_output_path,
+    require_explicit_project_media_directory_destination,
+)
 
 
 class VisualQA(BaseTool):
@@ -276,21 +279,21 @@ class VisualQA(BaseTool):
         frames = []
         for ts in timestamps:
             ts_label = f"{ts:.1f}".replace(".", "_")
-            frame_path = str(output_dir / f"frame_{ts_label}s.jpg")
+            frame_path = output_dir / f"frame_{ts_label}s.jpg"
             cmd = [
                 "ffmpeg", "-y",
                 "-ss", str(ts),
                 "-i", input_path,
                 "-frames:v", "1",
                 "-q:v", "2",
-                frame_path,
+                str(frame_path),
             ]
             try:
                 self.run_command(cmd)
-                if Path(frame_path).exists():
+                if frame_path.exists():
                     frames.append({
                         "timestamp": ts,
-                        "path": frame_path,
+                        "path": portable_output_path(frame_path),
                     })
             except Exception:
                 frames.append({
@@ -304,7 +307,7 @@ class VisualQA(BaseTool):
             data={
                 "operation": "review",
                 "input": input_path,
-                "output_dir": str(output_dir),
+                "output_dir": portable_output_path(output_dir),
                 "frame_count": len([f for f in frames if f.get("path")]),
                 "frames": frames,
             },

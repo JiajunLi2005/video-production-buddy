@@ -27,7 +27,10 @@ from tools.base_tool import (
     ToolTier,
     ToolRuntime,
 )
-from tools.output_paths import require_explicit_project_artifact_destination
+from tools.output_paths import (
+    portable_output_path,
+    require_explicit_project_artifact_destination,
+)
 
 
 ANALYSIS_DEPTHS = ["transcript_only", "standard", "deep"]
@@ -246,7 +249,7 @@ class VideoAnalyzer(BaseTool):
         # Initialize brief structure
         brief = {
             "version": "1.0",
-            "output_dir": str(output_dir),
+            "output_dir": portable_output_path(output_dir),
             "source": {
                 "type": platform,
                 "duration_seconds": 0,
@@ -458,7 +461,9 @@ class VideoAnalyzer(BaseTool):
             return ToolResult(
                 success=True,
                 data=brief,
-                artifacts=[str(output_dir / "video_analysis_brief.json")],
+                artifacts=[
+                    portable_output_path(output_dir / "video_analysis_brief.json")
+                ],
                 duration_seconds=round(time.time() - start, 2),
             )
 
@@ -657,9 +662,9 @@ class VideoAnalyzer(BaseTool):
         self._save_brief(brief, output_dir)
 
         elapsed = time.time() - start
-        artifacts = [str(output_dir / "video_analysis_brief.json")]
+        artifacts = [portable_output_path(output_dir / "video_analysis_brief.json")]
         if keyframe_dir.exists():
-            artifacts.append(str(keyframe_dir))
+            artifacts.append(portable_output_path(keyframe_dir))
 
         return ToolResult(
             success=True,

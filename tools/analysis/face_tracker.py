@@ -24,7 +24,7 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
-from tools.output_paths import require_explicit_project_sidecar_path
+from tools.output_paths import portable_output_path, require_explicit_project_sidecar_path
 
 
 class FaceTracker(BaseTool):
@@ -187,8 +187,8 @@ class FaceTracker(BaseTool):
         return ToolResult(
             success=True,
             data={
-                "output": str(output_path),
-                "output_path": str(output_path),
+                "output": portable_output_path(output_path),
+                "output_path": portable_output_path(output_path),
                 "video_width": result_data["video_width"],
                 "video_height": result_data["video_height"],
                 "fps": result_data["fps"],
@@ -197,7 +197,7 @@ class FaceTracker(BaseTool):
                 "faces_detected": result_data["face_detected_count"],
                 "method": "mediapipe" if self._has_mediapipe() else "opencv_haar",
             },
-            artifacts=[str(output_path)],
+            artifacts=[portable_output_path(output_path)],
             duration_seconds=round(elapsed, 2),
         )
 

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Callable
 
 import pytest
 
 from tools.base_tool import ToolResult
 from tools.output_paths import (
+    portable_output_path,
     require_explicit_output_path,
     require_explicit_project_artifact_destination,
     require_explicit_project_corpus_destination,
@@ -34,6 +35,26 @@ EXPLICIT_OUTPUT_HELPERS = {
     "require_explicit_project_source_media_destination",
     "require_explicit_project_corpus_destination",
 }
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (
+            PureWindowsPath("projects", "demo", "renders", "final.mp4"),
+            "projects/demo/renders/final.mp4",
+        ),
+        (
+            PureWindowsPath("C:/workspace/projects/demo/artifacts/report.json"),
+            "C:/workspace/projects/demo/artifacts/report.json",
+        ),
+    ],
+)
+def test_portable_output_path_normalizes_windows_separators(
+    path: PureWindowsPath,
+    expected: str,
+) -> None:
+    assert portable_output_path(path) == expected
 
 
 @pytest.mark.parametrize(

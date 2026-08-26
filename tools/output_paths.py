@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from os import PathLike, fspath
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from tools.base_tool import ToolResult
@@ -13,6 +13,16 @@ _PROJECT_ARTIFACT_ROOTS = {"artifacts"}
 _PROJECT_SIDECAR_ROOTS = {"artifacts", "assets", "renders"}
 _SOURCE_MEDIA_ROOTS = {"assets", "reference_assets"}
 _PROJECT_CORPUS_ROOTS = {"corpus"}
+
+
+def portable_output_path(path: PurePath) -> str:
+    """Serialize a filesystem path for persisted tool output metadata.
+
+    Tools should keep using native ``Path`` objects for filesystem and subprocess
+    operations. At JSON, artifact, and ``ToolResult`` boundaries, POSIX-style
+    separators keep project-relative references stable across operating systems.
+    """
+    return path.as_posix()
 
 
 def require_explicit_output_path(
