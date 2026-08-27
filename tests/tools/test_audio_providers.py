@@ -447,9 +447,9 @@ def test_piper_tts_writes_to_validated_output_path(
     assert result.success is True
     assert (tmp_path / validated_output_path).read_bytes() == b"wav"
     assert not (tmp_path / raw_output_path).exists()
-    assert result.data["output"] == str(validated_output_path)
-    assert result.data["output_path"] == str(validated_output_path)
-    assert result.artifacts == [str(validated_output_path)]
+    assert result.data["output"] == validated_output_path.as_posix()
+    assert result.data["output_path"] == validated_output_path.as_posix()
+    assert result.artifacts == [validated_output_path.as_posix()]
 
 
 def test_google_tts_writes_to_validated_output_path(
@@ -494,9 +494,9 @@ def test_google_tts_writes_to_validated_output_path(
     assert result.success is True
     assert (tmp_path / validated_output_path).read_bytes() == b"mp3"
     assert not (tmp_path / raw_output_path).exists()
-    assert result.data["output"] == str(validated_output_path)
-    assert result.data["output_path"] == str(validated_output_path)
-    assert result.artifacts == [str(validated_output_path)]
+    assert result.data["output"] == validated_output_path.as_posix()
+    assert result.data["output_path"] == validated_output_path.as_posix()
+    assert result.artifacts == [validated_output_path.as_posix()]
 
 
 def test_music_gen_writes_to_validated_output_path(
@@ -540,9 +540,9 @@ def test_music_gen_writes_to_validated_output_path(
     assert result.success is True
     assert (tmp_path / validated_output_path).read_bytes() == b"mp3"
     assert not (tmp_path / raw_output_path).exists()
-    assert result.data["output"] == str(validated_output_path)
-    assert result.data["output_path"] == str(validated_output_path)
-    assert result.artifacts == [str(validated_output_path)]
+    assert result.data["output"] == validated_output_path.as_posix()
+    assert result.data["output_path"] == validated_output_path.as_posix()
+    assert result.artifacts == [validated_output_path.as_posix()]
 
 
 def test_minimax_music_writes_to_validated_output_path(
@@ -591,9 +591,9 @@ def test_minimax_music_writes_to_validated_output_path(
     assert result.success is True
     assert (tmp_path / validated_output_path).read_bytes() == b"mp3"
     assert not (tmp_path / raw_output_path).exists()
-    assert result.data["output"] == str(validated_output_path)
-    assert result.data["output_path"] == str(validated_output_path)
-    assert result.artifacts == [str(validated_output_path)]
+    assert result.data["output"] == validated_output_path.as_posix()
+    assert result.data["output_path"] == validated_output_path.as_posix()
+    assert result.artifacts == [validated_output_path.as_posix()]
 
 
 def test_suno_music_writes_to_validated_output_path(
@@ -652,9 +652,9 @@ def test_suno_music_writes_to_validated_output_path(
     assert result.success is True
     assert (tmp_path / validated_output_path).read_bytes() == b"mp3"
     assert not (tmp_path / raw_output_path).exists()
-    assert result.data["output"] == str(validated_output_path)
-    assert result.data["output_path"] == str(validated_output_path)
-    assert result.artifacts == [str(validated_output_path)]
+    assert result.data["output"] == validated_output_path.as_posix()
+    assert result.data["output_path"] == validated_output_path.as_posix()
+    assert result.artifacts == [validated_output_path.as_posix()]
 
 
 @pytest.mark.parametrize(
@@ -723,9 +723,9 @@ def test_cosyvoice_tts_writes_to_validated_output_path(
     assert result.success is True
     assert (tmp_path / validated_output_path).read_bytes() == b"mp3"
     assert not (tmp_path / raw_output_path).exists()
-    assert result.data["output"] == str(validated_output_path)
-    assert result.data["output_path"] == str(validated_output_path)
-    assert result.artifacts == [str(validated_output_path)]
+    assert result.data["output"] == validated_output_path.as_posix()
+    assert result.data["output_path"] == validated_output_path.as_posix()
+    assert result.artifacts == [validated_output_path.as_posix()]
 
 
 def test_doubao_tts_writes_to_validated_output_and_metadata_paths(
@@ -804,10 +804,13 @@ def test_doubao_tts_writes_to_validated_output_and_metadata_paths(
     assert (tmp_path / validated_metadata_path).read_text(encoding="utf-8")
     assert not (tmp_path / raw_output_path).exists()
     assert not (tmp_path / raw_metadata_path).exists()
-    assert result.data["output"] == str(validated_output_path)
-    assert result.data["output_path"] == str(validated_output_path)
-    assert result.data["metadata_path"] == str(validated_metadata_path)
-    assert result.artifacts == [str(validated_output_path), str(validated_metadata_path)]
+    assert result.data["output"] == validated_output_path.as_posix()
+    assert result.data["output_path"] == validated_output_path.as_posix()
+    assert result.data["metadata_path"] == validated_metadata_path.as_posix()
+    assert result.artifacts == [
+        validated_output_path.as_posix(),
+        validated_metadata_path.as_posix(),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1023,7 +1026,7 @@ def test_generated_media_output_path_accepts_project_assets_path():
     )
 
     assert error is None
-    assert str(returned_path) == "projects/demo/assets/audio/voice.mp3"
+    assert returned_path.as_posix() == "projects/demo/assets/audio/voice.mp3"
 
 
 def test_audio_mixer_mix_success_payload_matches_output_schema(

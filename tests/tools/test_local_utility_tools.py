@@ -11,7 +11,7 @@ import pytest
 import jsonschema
 
 from tools.audio.audio_mixer import AudioMixer
-from tools.base_tool import ToolStatus
+from tools.base_tool import ToolResult, ToolStatus
 from tools.capture.cap_recorder import CapRecorder
 from tools.capture.screen_recorder import ScreenRecorder
 from tools.capture.screen_capture_selector import ScreenCaptureSelector
@@ -197,9 +197,13 @@ def test_cap_recorder_pick_latest_copies_to_project_destination(
     copied = tmp_path / "projects/test-screen-demo/renders/cap/recording.mp4"
     assert result.success is True
     assert copied.read_bytes() == b"cap-video"
-    assert result.data["output_dir"] == str(Path("projects/test-screen-demo/renders/cap"))
-    assert result.data["output_path"] == str(Path("projects/test-screen-demo/renders/cap/recording.mp4"))
-    assert result.artifacts == [str(Path("projects/test-screen-demo/renders/cap/recording.mp4"))]
+    assert result.data["output_dir"] == "projects/test-screen-demo/renders/cap"
+    assert result.data["output_path"] == (
+        "projects/test-screen-demo/renders/cap/recording.mp4"
+    )
+    assert result.artifacts == [
+        "projects/test-screen-demo/renders/cap/recording.mp4"
+    ]
 
 
 def test_cap_recorder_pick_latest_honors_since_minutes(
@@ -1520,7 +1524,7 @@ def test_diagram_gen_mermaid_cli_fails_when_expected_output_is_missing(
     )
 
     assert result.success is False
-    assert str(output_path) in (result.error or "")
+    assert output_path.as_posix() in (result.error or "")
 
 
 def test_diagram_gen_rejects_non_finite_mermaid_config_before_render(
@@ -1777,7 +1781,7 @@ def test_screen_capture_selector_record_passes_valid_project_output_to_ffmpeg(
 
         def execute(self, provider_inputs: dict[str, object]) -> Any:
             calls.append(provider_inputs)
-            return SimpleNamespace(
+            return ToolResult(
                 success=True,
                 data={"output_path": provider_inputs["output_path"]},
                 artifacts=[provider_inputs["output_path"]],
@@ -1803,7 +1807,9 @@ def test_screen_capture_selector_record_passes_valid_project_output_to_ffmpeg(
     assert result.success is True
     assert calls == [
         {
-            "output_path": "projects/test-screen-demo/renders/recording.mp4",
+            "output_path": str(
+                Path("projects/test-screen-demo/renders/recording.mp4")
+            ),
             "duration_seconds": 5,
             "fps": 24,
             "capture_audio": False,
@@ -1854,7 +1860,7 @@ def test_screen_capture_selector_pick_latest_copies_cap_recording_to_project_out
         def execute(self, provider_inputs: dict[str, object]) -> Any:
             calls.append(provider_inputs)
             if provider_inputs["operation"] == "pick_latest":
-                return SimpleNamespace(
+                return ToolResult(
                     success=True,
                     data={
                         "output_path": provider_inputs["output_dir"],
@@ -1862,7 +1868,7 @@ def test_screen_capture_selector_pick_latest_copies_cap_recording_to_project_out
                     },
                     artifacts=[provider_inputs["output_dir"]],
                 )
-            return SimpleNamespace(
+            return ToolResult(
                 success=True,
                 data={
                     "recordings": [
@@ -1893,7 +1899,7 @@ def test_screen_capture_selector_pick_latest_copies_cap_recording_to_project_out
     assert calls == [
         {
             "operation": "pick_latest",
-            "output_dir": "projects/test-screen-demo/renders/latest.mp4",
+            "output_dir": str(Path("projects/test-screen-demo/renders/latest.mp4")),
             "since_minutes": 9,
         }
     ]

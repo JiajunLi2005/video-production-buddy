@@ -55,7 +55,7 @@ def test_cap_pick_latest_accepts_exact_output_file_path(tmp_path, monkeypatch):
     )
 
     assert result.success
-    assert result.data["output_path"] == str(requested_output)
+    assert result.data["output_path"] == requested_output.as_posix()
     assert (tmp_path / requested_output).read_bytes() == b"cap-recording"
 
 
