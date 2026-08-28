@@ -1471,11 +1471,11 @@ def test_hyperframes_render_success_payload_includes_output_path(
 
     assert result.success is True
     assert result.data is not None
-    assert result.data["output"] == str(output_path)
-    assert result.data["output_path"] == str(output_path)
-    assert result.data["workspace"] == str(workspace_path.resolve())
-    assert result.data["workspace_path"] == str(workspace_path.resolve())
-    assert result.artifacts == [str(output_path)]
+    assert result.data["output"] == output_path.as_posix()
+    assert result.data["output_path"] == output_path.as_posix()
+    assert result.data["workspace"] == workspace_path.resolve().as_posix()
+    assert result.data["workspace_path"] == workspace_path.resolve().as_posix()
+    assert result.artifacts == [output_path.as_posix()]
     assert {
         "operation",
         "output",
@@ -1570,10 +1570,12 @@ def test_hyperframes_render_passes_absolute_output_path_to_cli(
 
     assert result.success is True
     assert result.data is not None
-    assert result.data["output_path"] == str(output_path)
+    assert result.data["output_path"] == output_path.as_posix()
     render_step = result.data["steps"]["render"]
     assert Path(render_step["cli_output_path"]).is_absolute()
-    assert render_step["cli_output_path"] == str(output_path.resolve(strict=False))
+    assert render_step["cli_output_path"] == output_path.resolve(
+        strict=False
+    ).as_posix()
     assert output_path.read_bytes() == b"rendered"
 
 
@@ -1631,7 +1633,7 @@ def test_hyperframes_render_missing_output_error_names_cli_output_path(
     )
 
     assert result.success is False
-    expected_cli_path = str(output_path.resolve(strict=False))
+    expected_cli_path = output_path.resolve(strict=False).as_posix()
     assert expected_cli_path in (result.error or "")
     assert "stdout_tail" not in (result.error or "")
     assert result.data is not None
@@ -1673,12 +1675,12 @@ def test_hyperframes_scaffold_packages_cjk_font_for_chinese_text(tmp_path: Path)
     assert "Noto Sans SC" in html
     assert "assets/NotoSansSC.ttf" in html
     assert result.data is not None
-    assert result.data["workspace"] == str(workspace_path)
-    assert result.data["workspace_path"] == str(workspace_path)
+    assert result.data["workspace"] == workspace_path.as_posix()
+    assert result.data["workspace_path"] == workspace_path.as_posix()
     font_assets = result.data["font_assets"]
     assert font_assets[0]["family"] == "Noto Sans SC"
-    assert font_assets[0]["from"] == str(font_path)
-    assert font_assets[0]["to"] == str(staged_font)
+    assert font_assets[0]["from"] == font_path.as_posix()
+    assert font_assets[0]["to"] == staged_font.as_posix()
     assert font_assets[0]["src"] == "assets/NotoSansSC.ttf"
     assert font_assets[0]["format"] == "truetype"
     jsonschema.validate(instance=result.data, schema=HyperFramesCompose.output_schema)

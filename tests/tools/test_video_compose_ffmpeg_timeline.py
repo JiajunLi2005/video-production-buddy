@@ -77,7 +77,7 @@ def test_ffmpeg_compose_uses_source_in_seconds_for_source_seek(
 
     assert result.success, result.error
     assert result.data is not None
-    assert result.data["output_path"] == str(output)
+    assert result.data["output_path"] == output.as_posix()
     trim_cmd = commands[0]
     assert trim_cmd[trim_cmd.index("-ss") + 1] == "1.25"
     assert trim_cmd[trim_cmd.index("-t") + 1] == "2.5"
@@ -215,7 +215,7 @@ def test_burn_subtitles_escapes_single_quotes_in_subtitle_filter(
 
     assert result.success, result.error
     assert result.data is not None
-    assert result.data["output_path"] == str(output_path)
+    assert result.data["output_path"] == output_path.as_posix()
     assert "subtitle\\'s" in captured["vf"]
 
 
@@ -532,9 +532,9 @@ def test_video_compose_remotion_render_success_payload_includes_output_path(
 
     assert result.success is True
     assert result.data is not None
-    assert result.data["output"] == str(output)
-    assert result.data["output_path"] == str(output)
-    assert result.artifacts == [str(output)]
+    assert result.data["output"] == output.as_posix()
+    assert result.data["output_path"] == output.as_posix()
+    assert result.artifacts == [output.as_posix()]
     _assert_video_compose_output_schema_matches(
         result.data,
         {"operation", "output", "output_path", "profile"},
@@ -570,9 +570,9 @@ def test_video_compose_overlay_success_payload_includes_output_path(
 
     assert result.success is True
     assert result.data is not None
-    assert result.data["output"] == str(output)
-    assert result.data["output_path"] == str(output)
-    assert result.artifacts == [str(output)]
+    assert result.data["output"] == output.as_posix()
+    assert result.data["output_path"] == output.as_posix()
+    assert result.artifacts == [output.as_posix()]
     _assert_video_compose_output_schema_matches(
         result.data,
         {"operation", "overlay_count", "output", "output_path"},
@@ -605,9 +605,9 @@ def test_video_compose_encode_success_payload_includes_output_path(
 
     assert result.success is True
     assert result.data is not None
-    assert result.data["output"] == str(output)
-    assert result.data["output_path"] == str(output)
-    assert result.artifacts == [str(output)]
+    assert result.data["output"] == output.as_posix()
+    assert result.data["output_path"] == output.as_posix()
+    assert result.artifacts == [output.as_posix()]
     _assert_video_compose_output_schema_matches(
         result.data,
         {"operation", "codec", "crf", "profile", "output", "output_path"},

@@ -170,6 +170,29 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
+def _portable_project_references(value: Any) -> Any:
+    """Normalize project-scoped path strings at the ToolResult boundary.
+
+    Tool implementations keep native paths for filesystem and subprocess work.
+    Once a project-relative path is returned as metadata, forward slashes keep
+    the reference stable across operating systems without rewriting arbitrary
+    user text, URLs, or absolute input paths.
+    """
+    if isinstance(value, str):
+        normalized = value.replace("\\", "/")
+        return normalized if "projects/" in normalized else value
+    if isinstance(value, dict):
+        return {
+            key: _portable_project_references(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_portable_project_references(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_portable_project_references(item) for item in value)
+    return value
+
+
 @dataclass
 class ToolResult:
     """Standard result returned by tool execution."""
@@ -181,6 +204,15 @@ class ToolResult:
     duration_seconds: float = 0.0
     seed: Optional[int] = None
     model: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        self.normalize_project_references()
+
+    def normalize_project_references(self) -> None:
+        """Normalize persisted project references after result mutations."""
+        self.data = _portable_project_references(self.data)
+        self.artifacts = _portable_project_references(self.artifacts)
+        self.error = _portable_project_references(self.error)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe snapshot for checkpoint/report persistence."""
@@ -252,6 +284,9 @@ def _instrument_execute(fn: Callable) -> Callable:
             raise
         finally:
             depth_state.value = depth
+
+        if isinstance(result, ToolResult):
+            result.normalize_project_references()
 
         if project_dir is None:
             # The tool may have created its own project dir during execute

@@ -191,7 +191,7 @@ def test_duck_schedule_filter_includes_input_paths_and_output(
     })
     assert str(speech) in cmd
     assert str(music) in cmd
-    assert out in cmd
+    assert str(Path(out)) in cmd
 
 
 def test_duck_schedule_emits_amix_to_combine_speech_and_ducked_music(

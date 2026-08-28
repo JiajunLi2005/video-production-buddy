@@ -301,9 +301,9 @@ def test_video_stitch_success_payload_includes_output_path(
 
     assert result.success is True
     assert result.data is not None
-    assert result.data["output"] == str(output_path)
-    assert result.data["output_path"] == str(output_path)
-    assert result.artifacts == [str(output_path)]
+    assert result.data["output"] == output_path.as_posix()
+    assert result.data["output_path"] == output_path.as_posix()
+    assert result.artifacts == [output_path.as_posix()]
     assert {
         "operation",
         "clip_count",
@@ -365,9 +365,9 @@ def test_video_stitch_spatial_success_payload_includes_output_path(
 
     assert result.success is True
     assert result.data is not None
-    assert result.data["output"] == str(output_path)
-    assert result.data["output_path"] == str(output_path)
-    assert result.artifacts == [str(output_path)]
+    assert result.data["output"] == output_path.as_posix()
+    assert result.data["output_path"] == output_path.as_posix()
+    assert result.artifacts == [output_path.as_posix()]
     jsonschema.validate(instance=result.data, schema=VideoStitch.output_schema)
 
 

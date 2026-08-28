@@ -851,6 +851,58 @@ def test_tool_result_to_dict_is_json_safe_for_path_values():
     json.dumps(payload, allow_nan=False)
 
 
+def test_tool_result_normalizes_project_path_strings_at_output_boundary():
+    result = ToolResult(
+        success=True,
+        data={
+            "output_path": r"projects\demo\renders\final.mp4",
+            "nested": [r"projects\demo\artifacts\report.json"],
+            "absolute_project_path": (
+                r"C:\workspace\projects\demo\renders\final.mp4"
+            ),
+            "input_path": r"C:\source\input.mp4",
+            "message": r"keep\arbitrary\text",
+        },
+        artifacts=[r"projects\demo\renders\final.mp4"],
+    )
+
+    assert result.data == {
+        "output_path": "projects/demo/renders/final.mp4",
+        "nested": ["projects/demo/artifacts/report.json"],
+        "absolute_project_path": (
+            "C:/workspace/projects/demo/renders/final.mp4"
+        ),
+        "input_path": r"C:\source\input.mp4",
+        "message": r"keep\arbitrary\text",
+    }
+    assert result.artifacts == ["projects/demo/renders/final.mp4"]
+
+
+def test_tool_result_normalizes_project_paths_embedded_in_errors():
+    result = ToolResult(
+        success=False,
+        error=r"Expected output was not created: projects\demo\renders\final.mp4",
+    )
+
+    assert result.error == (
+        "Expected output was not created: projects/demo/renders/final.mp4"
+    )
+
+
+def test_base_tool_normalizes_project_references_added_after_result_creation():
+    class MutatingResultTool(BaseTool):
+        def execute(self, inputs: dict[str, Any]) -> ToolResult:
+            result = ToolResult(success=True)
+            result.data["output_path"] = r"projects\demo\renders\final.mp4"
+            result.artifacts.append(r"projects\demo\renders\final.mp4")
+            return result
+
+    result = MutatingResultTool().execute({})
+
+    assert result.data["output_path"] == "projects/demo/renders/final.mp4"
+    assert result.artifacts == ["projects/demo/renders/final.mp4"]
+
+
 def test_tool_result_to_dict_replaces_non_finite_numbers_with_nulls():
     result = ToolResult(
         success=True,

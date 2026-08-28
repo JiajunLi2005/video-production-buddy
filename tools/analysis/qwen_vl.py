@@ -33,7 +33,7 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
-from tools.output_paths import require_optional_project_sidecar_path
+from tools.output_paths import portable_output_path, require_optional_project_sidecar_path
 
 _CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 
@@ -245,7 +245,7 @@ class QwenVL(BaseTool):
         if output_path is not None:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(text, encoding="utf-8")
-            out_str = str(output_path)
+            out_str = portable_output_path(output_path)
 
         usage = data.get("usage", {})
         return ToolResult(
