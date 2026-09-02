@@ -12,6 +12,7 @@ from tools.video.higgsfield_video import HiggsFieldVideo
 from tools.video.kling_video import KlingVideo
 from tools.video.ltx_video_modal import LTXVideoModal
 from tools.video.minimax_video import MiniMaxVideo
+from tools.video.muapi_video import MuapiVideo
 from tools.video.pexels_video import PexelsVideo
 from tools.video.pixabay_video import PixabayVideo
 from tools.video.runway_video import RunwayVideo
@@ -32,6 +33,7 @@ def _configure_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEYGEN_API_KEY", "test-heygen-key")
     monkeypatch.setenv("MODAL_LTX2_ENDPOINT_URL", "https://modal.example.test/ltx")
     monkeypatch.setenv("ATLASCLOUD_API_KEY", "test-atlas-key")
+    monkeypatch.setenv("MUAPI_API_KEY", "test-muapi-key")
 
 
 def _fail_network(*_args, **_kwargs):
@@ -43,6 +45,7 @@ def _fail_network(*_args, **_kwargs):
     [
         KlingVideo(),
         AtlasCloudVideo(),
+        MuapiVideo(),
         MiniMaxVideo(),
         RunwayVideo(),
         HiggsFieldVideo(),
@@ -70,6 +73,7 @@ def test_cloud_video_image_to_video_requires_image_before_network(
     [
         KlingVideo(),
         AtlasCloudVideo(),
+        MuapiVideo(),
         MiniMaxVideo(),
         RunwayVideo(),
         HiggsFieldVideo(),
@@ -123,6 +127,7 @@ def test_minimax_fast_rejects_text_to_video_before_network(
     [
         KlingVideo(),
         AtlasCloudVideo(),
+        MuapiVideo(),
         MiniMaxVideo(),
         RunwayVideo(),
         HiggsFieldVideo(),
@@ -175,6 +180,7 @@ def test_cloud_video_requires_project_output_path_before_network(
     [
         (GrokVideo(), ("XAI_API_KEY",)),
         (AtlasCloudVideo(), ("ATLASCLOUD_API_KEY",)),
+        (MuapiVideo(), ("MUAPI_API_KEY", "MU_API_KEY")),
         (HeyGenVideo(), ("HEYGEN_API_KEY",)),
         (KlingVideo(), ("FAL_KEY", "FAL_AI_API_KEY")),
         (MiniMaxVideo(), ("MINIMAX_API_KEY",)),
@@ -212,6 +218,7 @@ def test_cloud_video_rejects_non_project_output_path_before_credentials(
     [
         (GrokVideo(), {"prompt": "A product hero shot"}),
         (AtlasCloudVideo(), {"prompt": "A product hero shot"}),
+        (MuapiVideo(), {"prompt": "A product hero shot"}),
         (HeyGenVideo(), {"prompt": "A product hero shot"}),
         (HiggsFieldVideo(), {"prompt": "A product hero shot"}),
         (KlingVideo(), {"prompt": "A product hero shot"}),
@@ -692,6 +699,7 @@ def test_video_selector_uses_grok_reference_default_when_env_t2v_model_conflicts
         (SeedanceReplicate(), "image_url"),
         (VeoVideo(), "image_url"),
         (GrokVideo(), "image_url"),
+        (MuapiVideo(), "image_url"),
         (HeyGenVideo(), "reference_image_url"),
         (LTXVideoModal(), "reference_image_url"),
     ],
