@@ -237,7 +237,7 @@ Representative capability families:
 
 | Capability | Examples |
 |------------|----------|
-| Analysis and transcription | `transcription_selector`, `transcriber`, `qwen_asr`, `scene_detect`, `frame_sampler`, `video_analyzer`, `video_understand`, `visual_qa`, `audio_probe` |
+| Analysis and transcription | `transcription_selector`, `transcriber`, `qwen_asr`, `scene_detect`, `frame_sampler`, `video_analyzer`, `video_understand`, `visual_qa`, `technical_qc`, `audio_probe` |
 | TTS and audio | `tts_selector`, `cosyvoice_tts`, `doubao_tts`, `elevenlabs_tts`, `google_tts`, `minimax_tts`, `openai_tts`, `piper_tts`, `audio_mixer`, `audio_enhance` |
 | Music | `music_selector`, `music_gen`, `minimax_music`, `suno_music`, plus search helpers such as `pixabay_music` |
 | Image generation and graphics | `image_selector`, `flux_image`, `grok_image`, `google_imagen`, `openai_image`, `recraft_image`, `wanx_image`, `local_diffusion`, stock image tools, `code_snippet`, `diagram_gen`, `math_animate` |
@@ -247,6 +247,13 @@ Representative capability families:
 | Subtitles and captions | `subtitle_gen`, `remotion_caption_burn`, and the `tools.audio.subtitle_aligner` forced-alignment utility |
 | Validation and compliance | `provider_consistency_check`, `scene_fidelity_check`, `runtime_consistency_check`, `hallucination_contract_check`, `product_identity_consistency_check`, `sample_product_visibility_check`, `compliance_check` |
 | Interaction and planning support | `genui_interaction`, `genui_session`, `genui_surface`, `ad_knowledge_retriever`, source/clip acquisition tools, screen capture selectors, character-animation tools |
+
+`technical_qc` is the deterministic post-render analysis boundary. It uses
+local FFmpeg/ffprobe passes to validate delivery metadata (dimensions, duration,
+frame rate, codecs, pixel format, audio layout, and file size) and locate black,
+frozen, or silent intervals plus loudness/clipping risks. Its JSON report is
+evidence for `render_report` and `final_review`; it does not make aesthetic
+decisions or replace watching representative sections of the render.
 
 ---
 

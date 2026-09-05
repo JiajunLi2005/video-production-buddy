@@ -194,7 +194,8 @@ stages:
       - remotion_caption_burn  # animated word-by-word captions via Remotion
       - showcase_card    # letterboxed showcase cards with typography
       - video_stitch     # multi-clip assembly with transitions
-      - visual_qa        # frame extraction + quality validation
+      - visual_qa        # representative frame extraction
+      - technical_qc     # deterministic whole-file technical QC
     tools_available:
       - video_compose
       - audio_mixer
@@ -210,15 +211,18 @@ stages:
       - showcase_card
       - video_stitch
       - visual_qa
+      - technical_qc
     checkpoint_required: true
     human_approval_default: false
     review_focus:
       - Output video exists and is playable
       - Subtitles are synced with speech
       - Audio is clear with balanced levels
+      - technical_qc completed and every timecoded warning was fixed or reviewed
     success_criteria:
       - Schema-valid render_report artifact
       - Output video file exists and is playable
+      - technical_qc JSON report saved and referenced by render_report metadata
 
   - name: publish
     skill: pipelines/talking-head/publish-director

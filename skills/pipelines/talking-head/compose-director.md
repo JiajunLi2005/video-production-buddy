@@ -418,9 +418,49 @@ video_compose.execute({
 })
 ```
 
-### Step 7: Visual QA
+### Step 7: Technical and Visual QA
 
-Use `visual_qa` to verify the output before declaring success:
+Run deterministic whole-file technical QC before visual review. This checks the
+container/profile plus black sections, long freezes, silence, integrated
+loudness, and true-peak clipping risk. Persist the JSON report with the other
+project artifacts:
+
+```
+technical_qc.execute({
+    "input_path": "<final_video>",
+    "expected": {
+        "width": 1080, "height": 1920,
+        "has_audio": true,
+        "pixel_format": "yuv420p",
+        "frame_rate": 30,
+        "video_codec": "h264",
+        "audio_codec": "aac",
+        "audio_channels": 2
+    },
+    "report_path": "projects/<project-name>/artifacts/technical_qc.json"
+})
+```
+
+- `ToolResult.success: false` means the file could not be probed or the report
+  could not be produced. Treat that as a blocker rather than assuming the
+  render passed.
+- `status: fail` means the video stream is missing, an explicitly requested
+  output profile does not match, or a requested scan could not complete. Fix
+  the cause or re-render before submitting.
+- `status: pass_with_warnings` does not automatically block delivery. Inspect
+  every reported interval because black, frozen, or silent sections may be
+  intentional editorial choices. Surface unresolved warnings in
+  `render_report` / `final_review`.
+- Technical QC is not an aesthetic review and does not replace watching the
+  render or inspecting representative frames.
+- Store the report path in `render_report.metadata.technical_qc_report`; map
+  its container evidence into `final_review.checks.technical_probe`, and map
+  unresolved interval/audio findings into the corresponding visual/audio
+  review issues. An intentional warning may be recorded as a verification note
+  after the reported interval has actually been watched.
+
+Then extract representative frames for visual inspection:
+
 ```
 visual_qa.execute({
     "operation": "review",
@@ -435,20 +475,9 @@ Then **read each extracted frame** to verify:
 - Transitions are clean (no artifacts at transition points)
 - Showcase cards have readable typography
 
-Also run probe validation:
-```
-visual_qa.execute({
-    "operation": "probe",
-    "input_path": "<final_video>",
-    "expected": {
-        "width": 1080, "height": 1920,
-        "has_audio": true,
-        "pixel_format": "yuv420p"
-    },
-})
-```
+When the edit needs point-in-time evidence (for example, comparing speech and
+showcase sections), optionally keep the sampled audio-level check:
 
-And check audio levels:
 ```
 visual_qa.execute({
     "operation": "audio_levels",
@@ -456,7 +485,8 @@ visual_qa.execute({
     "timestamps": [5.0, 50.0, 170.0],
 })
 ```
-Verify: speech sections have higher volume than showcase sections (confirms music placement).
+Verify that speech sections have higher volume than showcase sections when that
+is the approved mix intent.
 
 ### Step 8: Build Render Report
 
