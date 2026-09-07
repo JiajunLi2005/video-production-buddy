@@ -505,6 +505,8 @@ stages:
       - hallucination_contract_check
       - video_compose
       - audio_mixer
+    optional_tools:
+      - technical_qc
     tools_available:
       - ad_video_planning_chain_check
       - provider_consistency_check
@@ -513,6 +515,7 @@ stages:
       - hallucination_contract_check
       - video_compose
       - audio_mixer
+      - technical_qc
     review_focus:
       - ad_video_planning_chain_check passes with production_bible, script, and scene_plan before render
       - provider_consistency_check passes with production_proposal, asset_manifest, script, and decision_log before render,
@@ -526,6 +529,7 @@ stages:
       - crop_regions verified present before each derivative render
       - Each derivative is a separate output file
       - render_report output resolution matches each aspect-ratio variant label; 15s/15s_short outputs are <=15s
+      - technical_qc completed for every primary and derivative output, with no failed or unresolved checks
       - Duration within ±5% of target
       - 'Audio channels: stereo'
       - final_review.status == pass after inspecting actual rendered outputs
@@ -535,6 +539,7 @@ stages:
     success_criteria:
       - render_report artifact produced
       - final_review artifact produced with status pass
+      - technical_qc reports exist for every render_report output and all required checks completed
       - final_review subtitle evidence matches production_proposal and music evidence matches the approved music_strategy
       - ad_video_planning_chain_check passed before video_compose
       - provider_consistency_check confirmed narration coverage and visual provider locks before video_compose

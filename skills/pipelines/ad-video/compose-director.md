@@ -303,27 +303,66 @@ After `video_compose` returns, verify via `result.data`:
 - the output `variant` label matches the actual resolution (`16:9` is landscape, `9:16` is vertical, `1:1` is square)
 - `audio_channels` == 2 (stereo)
 
-### Check 5: Post-render loudness
+### Check 5: Whole-file technical QC
 
-Use `ffmpeg -af volumedetect` to measure mean dB on the final output and compare to `audio_contract.target_lufs`. Loudness must be within ±2 LUFS of target:
+Run `technical_qc` on the primary output. It validates the delivery profile and
+scans the complete file for black sections, long freezes, silence, integrated
+loudness, and true-peak clipping risk. This replaces an approximate
+`volumedetect` mean-volume check with EBU R128 evidence and works unchanged on
+Windows, macOS, and Linux.
 
 ```python
-import re, subprocess
-proc = subprocess.run(
-    ["ffmpeg", "-i", str(output_path), "-af", "volumedetect", "-f", "null", "/dev/null"],
-    capture_output=True, text=True
-)
-match = re.search(r"mean_volume:\s*([-\d.]+)\s*dB", proc.stderr)
-if not match:
-    raise RuntimeError("Could not measure loudness on final output")
-mean_db = float(match.group(1))
-# Approximate LUFS ≈ mean_volume for short content with loudnorm applied
-if abs(mean_db - target_lufs) > 2.5:
-    raise RuntimeError(
-        f"Loudness {mean_db:.1f} dB is more than 2.5 dB off target {target_lufs} LUFS. "
-        "Re-mix and re-encode with the correct target_lufs."
-    )
+from tools.analysis.technical_qc import TechnicalQC
+
+primary_dimensions = {
+    "16:9": (1920, 1080),
+    "9:16": (1080, 1920),
+    "1:1": (1080, 1080),
+}
+width, height = primary_dimensions[EP_STATE["aspect_ratio_primary"]]
+target_duration = edit_decisions["total_duration_seconds"]
+
+qc_result = TechnicalQC().execute({
+    "input_path": str(output_path),
+    "expected": {
+        "width": width,
+        "height": height,
+        "min_duration": target_duration * 0.95,
+        "max_duration": target_duration * 1.05,
+        "pixel_format": "yuv420p",
+        "has_audio": True,
+        "frame_rate": 30,
+        "video_codec": "h264",
+        "audio_codec": "aac",
+        "audio_channels": 2,
+    },
+    "thresholds": {
+        "min_integrated_lufs": target_lufs - 2.5,
+        "max_integrated_lufs": target_lufs + 2.5,
+    },
+    "report_path": "projects/<project-name>/artifacts/technical_qc_primary.json",
+})
+if not qc_result.success:
+    raise RuntimeError(f"Technical QC could not run: {qc_result.error}")
+if not qc_result.data["passed"]:
+    raise RuntimeError(f"Technical QC failed: {qc_result.data['issues']}")
+
+blocking_warning_codes = {
+    "audio_too_quiet", "audio_too_loud", "audio_clipping_risk",
+}
+blocking_warnings = [
+    issue for issue in qc_result.data["issues"]
+    if issue["code"] in blocking_warning_codes
+]
+if blocking_warnings:
+    raise RuntimeError(f"Audio QC needs a new mix: {blocking_warnings}")
 ```
+
+Black, freeze, and silence findings are timecoded warnings because they can be
+intentional. Inspect each reported interval in the actual render. Re-render an
+unintentional interval; record an intentional one in
+`render_report.verification_notes` rather than silently discarding it. A
+requested check that could not complete is a failed QC result, not a pass.
 
 ### Check 6: Subtitle no-overlap (when subtitles enabled)
 
@@ -355,7 +394,11 @@ Call `audio_mixer` once per variant to produce a variant-appropriate mix (15s va
 After every derivative render, probe the actual file before adding it to
 `render_report.outputs[]`. The `variant` label, `resolution`, and
 `duration_seconds` must agree: `9:16` outputs are vertical, `1:1` outputs are
-square, and any `15s` / `15s_short` output is `<=15s`.
+square, and any `15s` / `15s_short` output is `<=15s`. Run the same
+`technical_qc` procedure for every derivative using its actual expected
+dimensions and duration, and write a distinct report such as
+`artifacts/technical_qc_9x16.json`. Do not add an output to the render report
+until its QC result completed and all warnings were either fixed or reviewed.
 
 ## Render Report Format
 
@@ -384,8 +427,17 @@ square, and any `15s` / `15s_short` output is `<=15s`.
     }
   ],
   "probe_results": {
-    "16:9": {"duration_check": "PASS", "resolution_check": "PASS", "audio_check": "PASS"},
-    "9:16": {"duration_check": "PASS", "resolution_check": "PASS", "audio_check": "PASS"}
+    "16:9": {"duration_check": "PASS", "resolution_check": "PASS", "audio_check": "PASS", "technical_qc": "PASS"},
+    "9:16": {"duration_check": "PASS", "resolution_check": "PASS", "audio_check": "PASS", "technical_qc": "WARN"}
+  },
+  "warnings": [
+    "9:16 freeze warning at 10.0-12.2s reviewed as an intentional end-card hold"
+  ],
+  "metadata": {
+    "technical_qc_reports": {
+      "16:9": "artifacts/technical_qc_primary.json",
+      "9:16": "artifacts/technical_qc_9x16.json"
+    }
   }
 }
 ```
@@ -398,7 +450,8 @@ them or advancing to publish. Write `artifacts/final_review.json` using
 
 The `final_review` must include:
 - `technical_probe` with container, duration, resolution, fps, audio, codec, and
-  file-size evidence from the rendered file
+  file-size evidence from the rendered file; derive this from the corresponding
+  `technical_qc` report and retain its path in `final_review.metadata`
 - `visual_spotcheck` with at least 4 sampled frame paths covering opening,
   middle, climax, and ending
 - `audio_spotcheck` confirming narration, silence, clipping, mix
@@ -432,7 +485,9 @@ status is `revise` or `fail`.
 - [ ] `outputs` contains `16:9` entry
 - [ ] `outputs` contains one entry per opted-in derivative (and cross-products)
 - [ ] Every `render_report.outputs[]` variant has matching resolution and short variants are `<=15s`
-- [ ] All probe results PASS
+- [ ] Probe results are PASS, or WARN only with a matching verification note
+- [ ] Every primary and derivative output has a saved `technical_qc` report
+- [ ] No Technical QC failed; every timecoded warning was fixed or explicitly reviewed
 - [ ] `render_report.renderer` matches `EP_STATE.render_runtime`
 - [ ] `final_review.status == "pass"` and every required self-review check has evidence
 - [ ] `final_review.output_path` and probe/runtime evidence match `render_report`
