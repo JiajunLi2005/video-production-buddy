@@ -66,6 +66,8 @@ FAL_KEY=                     # FLUX, Recraft, Seedance, Kling, Veo, MiniMax vide
 FAL_AI_API_KEY=              # Optional fal.ai alias used by several provider tools
 
 # VIDEO
+MUAPI_API_KEY=               # MuAPI Seedance 2 video gateway (also needs FFmpeg/ffprobe)
+MU_API_KEY=                  # Optional MuAPI alias
 HEYGEN_API_KEY=              # HeyGen avatar video gateway
 RUNWAY_API_KEY=              # Runway direct API: Seedance 2, Gen-4.5, Veo 3.1, etc.
 RUNWAYML_API_SECRET=         # Optional Runway alias accepted by runway_video
@@ -101,6 +103,33 @@ WAV2LIP_PATH=                # Optional local Wav2Lip repo path
 ---
 
 ## Cloud Providers
+
+### MuAPI
+
+**Tool:** `muapi_video`, routed through `video_selector` with provider `muapi`.
+Set `MUAPI_API_KEY` (or `MU_API_KEY`) and install FFmpeg/ffprobe before submitting
+generation jobs. Configure `VPB_VIDEO_GENERATION_PROVIDER=muapi` when desired.
+The default API base is `https://api.muapi.ai/api/v1`; `MUAPI_BASE_URL` is an
+advanced override for a trusted endpoint that will receive your key and inputs.
+
+Supported operations are `text_to_video` and `image_to_video`, with the matching
+`seedance-2-text-to-video` / `seedance-2-image-to-video` model variants and their
+`-fast` variants. Duration is 4–15 seconds. Choose `21:9`, `16:9`, `4:3`, `1:1`,
+`3:4`, or `9:16` for `aspect_ratio`.
+
+For image-to-video, pass `reference_image_path` to the selector, or `image_path`
+to the provider. The tool validates JPEG/PNG/WebP files up to 10 MiB and uploads
+them directly to MuAPI's `/upload_file` endpoint using the same MuAPI key.
+Alternatively pass an existing `image_url`. Local uploads do not require fal.ai.
+MuAPI currently requires a positive account balance even for its free upload
+endpoint; verify account requirements in the [official upload guide](https://muapi.ai/docs/file-upload).
+
+Write to a `.mp4` path below `projects/<project-name>/assets/` or `renders/`.
+Downloads are limited to 500 MiB and use direct HTTPS connections to validated
+public IP addresses, without redirects, ambient proxy settings, or download
+credentials. FFprobe metadata and a full FFmpeg decode must pass before an
+atomic replacement of the destination. Failed downloads preserve an existing
+artifact. API submissions and polling retain normal environment proxy behavior.
 
 ### xAI — Grok Image + Video
 

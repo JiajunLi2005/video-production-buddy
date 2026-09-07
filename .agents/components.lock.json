@@ -58,13 +58,13 @@
         {
           "mode": "100644",
           "path": "SKILL.md",
-          "sha256": "sha256:bb98190ddc8080a8e6f72c45f6636b4fb4a22ed6712361b13380ccb0a941e940"
+          "sha256": "sha256:5714bf9534b23bb7db3ec12ad760e6d71150b06f88d9ed7c52fbcf9b60dc901e"
         }
       ],
       "kind": "skill",
       "source": "video-production-buddy-local",
       "sourcePath": ".agents/local/skills/ai-video-gen",
-      "treeSha256": "sha256:8fb74dccb79a39ef4e53bd3eca079bfc82f38edae32837f8be2b977ac7e3a1f5",
+      "treeSha256": "sha256:4f45b3574ccf5fe9eaa17d8d2c8e7140bcb4d4ba9895835e9261533906ef50aa",
       "type": "local"
     },
     "atlas-cloud": {

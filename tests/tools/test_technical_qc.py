@@ -538,3 +538,69 @@ def test_technical_qc_keeps_partial_report_when_one_ffmpeg_scan_fails(
         "technical_check_failed",
         "technical_check_failed",
     ]
+
+
+def test_technical_qc_rejects_decoder_errors_even_with_zero_exit(tmp_path, monkeypatch):
+    input_path = tmp_path / "corrupt.mp4"
+    input_path.write_bytes(b"video")
+    monkeypatch.setattr(TechnicalQC, "run_command", _runner(
+        black_output="[h264] [error] Error submitting packet to decoder: Invalid data"
+    ))
+    result = TechnicalQC().execute({"input_path": str(input_path)})
+    assert result.success
+    assert result.data["status"] == "fail"
+    assert "black_frames" not in result.data["checks_run"]
+    assert "freeze_frames" not in result.data["checks_run"]
+
+
+@pytest.mark.parametrize("summary", [
+    "", "I: -16.0 LUFS\nLRA: 0.0 LU", "I: nan LUFS\nPeak: -1.0 dBFS",
+    "I: -16.0 LUFS\nSummary:\nI: nan LUFS\nPeak: -1.0 dBFS",
+    "Peak: -1.0 dBFS\nSummary:\nI: -16.0 LUFS\nPeak: nan dBFS",
+    "Peak: -inf dBFS\nSummary:\nI: -16.0 LUFS",
+    "I: -16.0 LUFS\nPeak: -1.0 dBFS\nSummary:\n",
+    "I: -16.0 LUFS\nI: 1e999 LUFS\nPeak: -1.0 dBFS",
+    "Summary:\nI: -16.0 LUFS\nPeak: -1e999 dBFS",
+])
+def test_technical_qc_fails_incomplete_loudness_summary(tmp_path, monkeypatch, summary):
+    input_path = tmp_path / "render.mp4"
+    input_path.write_bytes(b"video")
+    monkeypatch.setattr(TechnicalQC, "run_command", _runner(loudness_output=summary))
+    result = TechnicalQC().execute({"input_path": str(input_path), "checks": ["audio_loudness"]})
+    assert result.success
+    assert result.data["passed"] is False
+    assert result.data["checks_run"] == []
+    assert result.data["checks_skipped"][0]["check"] == "audio_loudness"
+
+
+def test_technical_qc_parses_exponents_and_keeps_intervals_consistent():
+    intervals = TechnicalQC._parse_intervals(
+        "silence_start: 2.08333e-05\nsilence_end: 4 | silence_duration: 3.99998",
+        "silence", 4.0,
+    )
+    assert intervals == [{"start_seconds": 0.0, "end_seconds": 4.0, "duration_seconds": 4.0}]
+    assert TechnicalQC._parse_intervals(
+        "freeze_start: -0.5\nfreeze_end: 10\nfreeze_duration: 10.5", "freeze", 4.0
+    ) == [{"start_seconds": 0.0, "end_seconds": 4.0, "duration_seconds": 4.0}]
+
+
+def test_technical_qc_accepts_measured_digital_silence_peak(tmp_path, monkeypatch):
+    input_path = tmp_path / "silent.mp4"
+    input_path.write_bytes(b"video")
+    monkeypatch.setattr(TechnicalQC, "run_command", _runner(
+        loudness_output="Summary:\nI: -70.0 LUFS\nLRA: 0.0 LU\nPeak: -inf dBFS"
+    ))
+    result = TechnicalQC().execute({"input_path": str(input_path), "checks": ["audio_loudness"]})
+    assert result.success
+    assert result.data["checks_run"] == ["audio_loudness"]
+    assert not result.data["checks_skipped"]
+    assert not any(issue["code"] == "audio_loudness_unavailable" for issue in result.data["issues"])
+
+
+def test_decode_validation_does_not_treat_filename_as_error_level():
+    from lib.ffmpeg_validation import require_clean_decode
+
+    require_clean_decode("[info] Input #0, mov, from 'projects/demo/[error]/clip.mp4':")
+    require_clean_decode("[info] title: concealing playback errors in an instructional video")
+    with pytest.raises(ValueError, match="FFmpeg decoding failed"):
+        require_clean_decode("[h264 @ 0x123] [warning] concealing 80 DC, 80 AC, 80 MV errors in P frame")

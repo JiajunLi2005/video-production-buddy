@@ -856,7 +856,7 @@ def test_tool_result_normalizes_project_path_strings_at_output_boundary():
         success=True,
         data={
             "output_path": r"projects\demo\renders\final.mp4",
-            "nested": [r"projects\demo\artifacts\report.json"],
+            "paths": [r"projects\demo\artifacts\report.json"],
             "absolute_project_path": (
                 r"C:\workspace\projects\demo\renders\final.mp4"
             ),
@@ -868,7 +868,7 @@ def test_tool_result_normalizes_project_path_strings_at_output_boundary():
 
     assert result.data == {
         "output_path": "projects/demo/renders/final.mp4",
-        "nested": ["projects/demo/artifacts/report.json"],
+        "paths": ["projects/demo/artifacts/report.json"],
         "absolute_project_path": (
             "C:/workspace/projects/demo/renders/final.mp4"
         ),
@@ -878,14 +878,14 @@ def test_tool_result_normalizes_project_path_strings_at_output_boundary():
     assert result.artifacts == ["projects/demo/renders/final.mp4"]
 
 
-def test_tool_result_normalizes_project_paths_embedded_in_errors():
+def test_tool_result_preserves_project_paths_embedded_in_error_prose():
     result = ToolResult(
         success=False,
         error=r"Expected output was not created: projects\demo\renders\final.mp4",
     )
 
     assert result.error == (
-        "Expected output was not created: projects/demo/renders/final.mp4"
+        r"Expected output was not created: projects\demo\renders\final.mp4"
     )
 
 
@@ -1675,3 +1675,24 @@ def test_hybrid_tools_explain_setup_path():
     ]
 
     assert offenders == []
+
+
+def test_tool_result_preserves_prose_containing_project_paths():
+    content = json.dumps({"location": "projects/demo", "text": "first\nsecond", "pattern": r"\d+"})
+    error = r"Failed at projects\demo\renders\final.mp4; preserve regex \d+"
+    result = ToolResult(
+        success=True,
+        data={"text": content, "prompt": r"projects\demo\title is literal text", "nested": {"message": content}},
+        error=error,
+    )
+    assert result.data["text"] == content
+    assert result.data["prompt"] == r"projects\demo\title is literal text"
+    assert result.data["nested"]["message"] == content
+    assert result.error == error
+
+
+def test_tool_result_preserves_posix_filename_with_literal_backslash():
+    path = r"projects/demo/assets/video/take\1.mp4"
+    result = ToolResult(success=True, data={"output_path": path}, artifacts=[path])
+    assert result.data["output_path"] == path
+    assert result.artifacts == [path]

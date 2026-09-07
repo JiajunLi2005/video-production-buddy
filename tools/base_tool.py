@@ -24,7 +24,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PureWindowsPath
 from typing import Any, Callable, Optional
 from uuid import UUID
 
@@ -170,26 +170,31 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
-def _portable_project_references(value: Any) -> Any:
-    """Normalize project-scoped path strings at the ToolResult boundary.
-
-    Tool implementations keep native paths for filesystem and subprocess work.
-    Once a project-relative path is returned as metadata, forward slashes keep
-    the reference stable across operating systems without rewriting arbitrary
-    user text, URLs, or absolute input paths.
-    """
+def _portable_project_references(value: Any, field_name: str = "") -> Any:
+    """Normalize declared path metadata; never infer paths from prose contents."""
+    if isinstance(value, PurePath):
+        return value.as_posix()
     if isinstance(value, str):
-        normalized = value.replace("\\", "/")
-        return normalized if "projects/" in normalized else value
+        is_path_field = field_name in {"path", "paths", "input", "output", "artifacts"} or field_name.endswith(
+            ("_path", "_paths", "_dir", "_dirs")
+        )
+        if not is_path_field or "\\" not in value:
+            return value
+        path = PureWindowsPath(value)
+        # A native POSIX filename may contain a literal backslash. Recognize
+        # Windows roots/separators instead of changing such filenames.
+        if (value.startswith("projects\\") or path.is_absolute()) and "projects" in path.parts:
+            return value.replace("\\", "/")
+        return value
     if isinstance(value, dict):
         return {
-            key: _portable_project_references(item)
+            key: _portable_project_references(item, str(key))
             for key, item in value.items()
         }
     if isinstance(value, list):
-        return [_portable_project_references(item) for item in value]
+        return [_portable_project_references(item, field_name) for item in value]
     if isinstance(value, tuple):
-        return tuple(_portable_project_references(item) for item in value)
+        return tuple(_portable_project_references(item, field_name) for item in value)
     return value
 
 
@@ -211,8 +216,7 @@ class ToolResult:
     def normalize_project_references(self) -> None:
         """Normalize persisted project references after result mutations."""
         self.data = _portable_project_references(self.data)
-        self.artifacts = _portable_project_references(self.artifacts)
-        self.error = _portable_project_references(self.error)
+        self.artifacts = _portable_project_references(self.artifacts, "artifacts")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe snapshot for checkpoint/report persistence."""

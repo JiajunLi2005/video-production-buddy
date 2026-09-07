@@ -1,7 +1,7 @@
 ---
 name: ai-video-gen
 description: |
-  Generate AI videos from text prompts using multiple provider gateways. Use when: (1) Generating videos from text descriptions, (2) Creating AI-generated video clips for content production, (3) Image-to-video generation with a reference image, (4) Choosing between video generation providers (VEO, Kling, Sora, Runway, Seedance, MiniMax). Supports two gateways: HeyGen API and fal.ai API.
+  Generate AI videos from text prompts using multiple provider gateways. Use when: (1) Generating videos from text descriptions, (2) Creating AI-generated video clips for content production, (3) Image-to-video generation with a reference image, (4) Choosing between video generation providers (VEO, Kling, Sora, Runway, Seedance, MiniMax). Supports HeyGen, fal.ai, and MuAPI gateways.
 allowed-tools: mcp__heygen__*
 metadata:
   openclaw:
@@ -9,16 +9,19 @@ metadata:
       env_any:
         - HEYGEN_API_KEY
         - FAL_KEY
+        - MUAPI_API_KEY
+        - MU_API_KEY
 ---
 
 # Video Generation (Multi-Gateway)
 
-Generate AI videos from text prompts. Supports multiple providers via two API gateways:
+Generate AI videos from text prompts through the configured gateway:
 
 | Gateway | Env Variable | Providers | Tool |
 |---------|-------------|-----------|------|
 | **fal.ai** | `FAL_KEY` | **Seedance 2.0** (standard + fast), Kling v3/v2.1, MiniMax, VEO | `seedance_video`, `kling_video`, `minimax_video`, `veo_video` |
 | **HeyGen** | `HEYGEN_API_KEY` | VEO 3.1, Kling Pro, Sora v2, Runway Gen-4, Seedance Pro / Lite (1.x) | `heygen_video` |
+| **MuAPI** | `MUAPI_API_KEY` or `MU_API_KEY` | Seedance 2 text-to-video and image-to-video (standard + fast) | `muapi_video` |
 
 **Preferred premium default — Seedance 2.0.** When any premium gateway is configured (`FAL_KEY` → `seedance_video`, or HeyGen's Video Agent / Avatar Shots path), Seedance 2.0 is the preferred default for cinematic, trailer, and high-fidelity clip work. It is the only model in the fleet with **single-pass native synchronized audio, multi-shot generation, director-level camera control, and lip-sync from quoted dialogue**, and it ranks #1 on Artificial Analysis Elo as of early 2026. Switch off it only when the user has a specific reason (budget, provider preference, stylistic fit like VEO for photoreal landscape or Kling for specific anime look). See Layer 3 `seedance-2-0` for the authoritative prompting and parameter guide.
 
@@ -30,6 +33,27 @@ Use whichever configured gateway best matches the user's available providers and
 
 - **HeyGen:** Set `HEYGEN_API_KEY` to access the multi-model gateway.
 - **fal.ai:** Set `FAL_KEY` to access Kling, MiniMax, and Veo through fal.ai.
+- **MuAPI:** Set `MUAPI_API_KEY` or `MU_API_KEY`. Use the MuAPI route below;
+  the HeyGen endpoints and examples in this guide do not apply to MuAPI.
+
+## MuAPI Route
+
+Use `video_selector` with `preferred_provider: "muapi"` (and
+`allowed_providers: ["muapi"]` when the task permits only this provider).
+Supported operations are `text_to_video` and `image_to_video`; model variants
+are `seedance-2-text-to-video`, `seedance-2-image-to-video`, and their `-fast`
+variants. Duration is 4–15 seconds.
+
+For a local reference image, pass `reference_image_path` to the selector. It
+maps to MuAPI's `image_path`, validates JPEG/PNG/WebP up to 10 MiB, and uploads
+directly to MuAPI with the MuAPI key. Do not upload that image through fal.ai
+or HeyGen. An existing `image_url` can be used instead. FFmpeg/ffprobe must be
+installed; use an `.mp4` output below `projects/<project-name>/assets/` or
+`renders/`. See `docs/PROVIDERS.md#muapi` for setup and download constraints.
+
+## HeyGen API Reference
+
+The API examples and workflow below apply only when HeyGen is selected.
 
 Do not describe either gateway as the default or top choice without checking the registry and current task fit first.
 

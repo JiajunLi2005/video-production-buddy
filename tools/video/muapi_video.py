@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
-import ipaddress
+import io
+import json
+import math
 import os
+import shutil
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+from lib.ffmpeg_validation import STRICT_DECODE_ARGS, require_clean_decode
+from tools.video._muapi_download import download_video
 
 from tools.base_tool import (
     BaseTool,
@@ -17,11 +25,9 @@ from tools.base_tool import (
     ToolResult,
     ToolRuntime,
     ToolStability,
-    ToolStatus,
     ToolTier,
 )
 from tools.video._shared import (
-    probe_output,
     require_generated_video_output_path,
     validate_video_operation,
 )
@@ -117,24 +123,6 @@ def _collect_video_urls(value: Any) -> list[str]:
     return urls
 
 
-def _safe_output_url(url: str) -> str:
-    parsed = urlsplit(url)
-    hostname = (parsed.hostname or "").lower()
-    if parsed.scheme != "https" or not hostname:
-        raise ValueError("MuAPI returned a non-HTTPS output URL")
-    if parsed.username or parsed.password or parsed.port:
-        raise ValueError("MuAPI returned an output URL with credentials or a port")
-    if hostname in {"localhost", "localhost.localdomain"}:
-        raise ValueError("MuAPI returned a local output URL")
-    try:
-        address = ipaddress.ip_address(hostname)
-    except ValueError:
-        address = None
-    if address is not None and (address.is_private or address.is_loopback or address.is_link_local):
-        raise ValueError("MuAPI returned a private output URL")
-    return url
-
-
 class MuapiVideo(BaseTool):
     name = "muapi_video"
     version = "0.1.0"
@@ -146,10 +134,11 @@ class MuapiVideo(BaseTool):
     determinism = Determinism.STOCHASTIC
     runtime = ToolRuntime.API
 
-    dependencies = ["env_any:MUAPI_API_KEY,MU_API_KEY"]
+    dependencies = ["env_any:MUAPI_API_KEY,MU_API_KEY", "cmd:ffmpeg", "cmd:ffprobe"]
     install_instructions = (
         "Set MUAPI_API_KEY to your MuAPI API key (MU_API_KEY is also accepted).\n"
-        "  Get one at https://muapi.ai/keys and see https://muapi.ai/docs"
+        "  Install FFmpeg and ffprobe to validate downloads before publication.\n"
+        "  Get a key at https://muapi.ai/keys; usage: docs/PROVIDERS.md#muapi"
     )
     agent_skills = ["ai-video-gen"]
 
@@ -157,6 +146,7 @@ class MuapiVideo(BaseTool):
     supports = {
         "text_to_video": True,
         "image_to_video": True,
+        "local_image_input": True,
         "aspect_ratio": True,
         "duration": True,
         "native_audio": True,
@@ -217,6 +207,10 @@ class MuapiVideo(BaseTool):
                 "type": "string",
                 "description": "Start-frame image URL for image_to_video.",
             },
+            "image_path": {
+                "type": "string",
+                "description": "Local JPEG, PNG or WebP, up to 10 MiB; uploaded directly to MuAPI.",
+            },
             "output_path": {"type": "string"},
         },
     }
@@ -267,14 +261,15 @@ class MuapiVideo(BaseTool):
         "duration",
         "aspect_ratio",
         "image_url",
+        "image_path",
     ]
-    side_effects = ["writes video file to output_path", "calls MuAPI video API"]
+    side_effects = [
+        "writes validated video file to output_path", "calls MuAPI video API",
+        "uploads image_path to MuAPI storage for image_to_video",
+    ]
     user_visible_verification = [
         "Inspect sampled frames for motion coherence and visual quality"
     ]
-
-    def get_status(self) -> ToolStatus:
-        return ToolStatus.AVAILABLE if _api_key() else ToolStatus.UNAVAILABLE
 
     def estimate_cost(self, inputs: dict[str, Any]) -> float:
         operation = inputs.get("operation", "text_to_video")
@@ -313,8 +308,10 @@ class MuapiVideo(BaseTool):
                     f"but operation is {operation}."
                 ),
             )
-        if operation == "image_to_video" and not inputs.get("image_url"):
-            return ToolResult(success=False, error="image_to_video requires image_url")
+        if operation == "image_to_video" and not (inputs.get("image_url") or inputs.get("image_path")):
+            return ToolResult(success=False, error="image_to_video requires image_url or image_path")
+        if inputs.get("image_url") and inputs.get("image_path"):
+            return ToolResult(success=False, error="Provide only one of image_url or image_path")
 
         try:
             duration = int(inputs.get("duration", 5))
@@ -326,6 +323,17 @@ class MuapiVideo(BaseTool):
         output_path, output_error = require_generated_video_output_path(inputs, self.name)
         if output_error:
             return output_error
+        if output_path.suffix.lower() != ".mp4":
+            return ToolResult(success=False, error="MuAPI output_path must use the .mp4 extension")
+        if not all(shutil.which(command) for command in ("ffmpeg", "ffprobe")):
+            return ToolResult(success=False, error="MuAPI needs FFmpeg and ffprobe to validate output")
+
+        image_data = None
+        if operation == "image_to_video" and inputs.get("image_path"):
+            try:
+                image_data = self._read_image(Path(inputs["image_path"]))
+            except Exception as exc:
+                return ToolResult(success=False, error=f"Invalid MuAPI reference image: {exc}")
 
         api_key = _api_key()
         if not api_key:
@@ -342,11 +350,27 @@ class MuapiVideo(BaseTool):
             "duration": duration,
             "aspect_ratio": inputs.get("aspect_ratio", "16:9"),
         }
-        if operation == "image_to_video":
-            payload["images_list"] = [inputs["image_url"]]
         headers = {"x-api-key": api_key, "Content-Type": "application/json"}
 
+        candidate_path = None
         try:
+            if operation == "image_to_video":
+                image_url = inputs.get("image_url")
+                if image_data is not None:
+                    uploaded = requests.post(
+                        f"{_base_url()}/upload_file",
+                        headers={"x-api-key": api_key},
+                        files={"file": image_data},
+                        timeout=60,
+                        allow_redirects=False,
+                    )
+                    uploaded.raise_for_status()
+                    if uploaded.status_code != 200:
+                        raise ValueError("MuAPI image upload did not return HTTP 200")
+                    image_url = uploaded.json().get("url")
+                    if not isinstance(image_url, str) or urlsplit(image_url).scheme != "https":
+                        raise ValueError("MuAPI image upload returned no HTTPS URL")
+                payload["images_list"] = [image_url]
             submit = requests.post(
                 f"{_base_url()}/{model}",
                 headers=headers,
@@ -368,24 +392,20 @@ class MuapiVideo(BaseTool):
                     success=False,
                     error="MuAPI video generation completed without an output URL",
                 )
-            download_url = _safe_output_url(urls[0])
-            video_response = requests.get(
-                download_url,
-                timeout=300,
-                allow_redirects=False,
-            )
-            if 300 <= getattr(video_response, "status_code", 200) < 400:
-                return ToolResult(
-                    success=False,
-                    error="MuAPI video output redirected unexpectedly",
-                )
-            video_response.raise_for_status()
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(video_response.content)
+            with tempfile.NamedTemporaryFile(
+                dir=output_path.parent, prefix=f".{output_path.stem}-", suffix=".mp4", delete=False
+            ) as candidate:
+                candidate_path = Path(candidate.name)
+            download_video(urls[0], candidate_path)
+            probed = self._validate_download(candidate_path)
+            os.replace(candidate_path, output_path)
         except Exception as exc:
             return ToolResult(success=False, error=f"MuAPI video generation failed: {exc}")
+        finally:
+            if candidate_path is not None:
+                candidate_path.unlink(missing_ok=True)
 
-        probed = probe_output(output_path)
         return ToolResult(
             success=True,
             data={
@@ -406,6 +426,61 @@ class MuapiVideo(BaseTool):
             duration_seconds=round(time.time() - start, 2),
             model=model,
         )
+
+    @staticmethod
+    def _read_image(path: Path) -> tuple[str, bytes, str]:
+        from PIL import Image
+
+        with path.open("rb") as handle:
+            content = handle.read(10 * 1024 * 1024 + 1)
+        if not content or len(content) > 10 * 1024 * 1024:
+            raise ValueError("Reference image must be nonempty and at most 10 MiB")
+        with Image.open(io.BytesIO(content)) as image:
+            formats = {"JPEG": ("jpg", "image/jpeg"), "PNG": ("png", "image/png"), "WEBP": ("webp", "image/webp")}
+            if image.format not in formats:
+                raise ValueError("Reference image must be JPEG, PNG or WebP")
+            extension, media_type = formats[image.format]
+            image.verify()
+        return f"reference.{extension}", content, media_type
+
+    def _validate_download(self, path: Path) -> dict[str, Any]:
+        # Do not let an untrusted download turn probing into another network
+        # request or an external-track read through a disguised playlist/MOV.
+        input_options = [
+            "-protocol_whitelist", "file,pipe", "-format_whitelist", "mov",
+            "-enable_drefs", "0", "-use_absolute_path", "0",
+        ]
+        probe = self.run_command([
+            "ffprobe", "-v", "level+error", *input_options,
+            "-show_format", "-show_streams", "-of", "json", str(path),
+        ], timeout=30)
+        require_clean_decode(probe.stderr or "")
+        media = json.loads(probe.stdout)
+        video = next((s for s in media.get("streams", []) if s.get("codec_type") == "video"), None)
+        duration = float(media.get("format", {}).get("duration", 0))
+        if (
+            video is None or not math.isfinite(duration) or duration <= 0
+            or int(video.get("width", 0)) <= 0 or int(video.get("height", 0)) <= 0
+            or "mp4" not in media.get("format", {}).get("format_name", "").split(",")
+        ):
+            raise ValueError("MuAPI output is not a valid, nonempty MP4 video")
+        decoded = self.run_command([
+            "ffmpeg", "-nostdin", "-hide_banner", "-nostats", *STRICT_DECODE_ARGS,
+            *input_options, "-i", str(path), "-map", "0:v:0", "-map", "0:a?",
+            "-progress", "pipe:1", "-f", "null", "-",
+        ], timeout=600)
+        require_clean_decode(decoded.stderr or "")
+        frames = [line.removeprefix("frame=").strip()
+                  for line in decoded.stdout.splitlines() if line.startswith("frame=")]
+        if not any(value.isdigit() and int(value) > 0 for value in frames):
+            raise ValueError("MuAPI output contains no decodable video frames")
+        return {
+            "file_size_bytes": path.stat().st_size,
+            "file_size_mb": round(path.stat().st_size / (1024 * 1024), 2),
+            "duration_seconds": duration,
+            "video_width": int(video["width"]), "video_height": int(video["height"]),
+            "video_codec": video.get("codec_name", ""),
+        }
 
     def _poll_prediction(
         self,

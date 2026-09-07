@@ -169,3 +169,78 @@ def test_technical_qc_detects_real_black_freeze_and_silence(
     assert result.data["metrics"]["freeze_segments"]
     assert result.data["metrics"]["silence_segments"]
     assert Path(result.data["report_path"]).is_file()
+
+
+@pytest.fixture
+def damaged_video(tmp_path: Path) -> Path:
+    """Damage a P-frame without invalidating the MP4 container metadata."""
+    import json
+
+    _require_ffmpeg()
+    output = tmp_path / "damaged.mp4"
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+        "testsrc2=s=320x180:r=30:d=4", "-f", "lavfi", "-i",
+        "sine=frequency=440:sample_rate=48000:duration=4",
+        "-c:v", "libx264", "-g", "30", "-c:a", "aac", "-ac", "2",
+        "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output),
+    ], check=True, capture_output=True, timeout=30)
+    probe = subprocess.run([
+        "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_packets",
+        "-show_entries", "packet=pos,size,pts_time,flags", "-of", "json", str(output),
+    ], check=True, capture_output=True, text=True, timeout=30)
+    packet = next(p for p in json.loads(probe.stdout)["packets"]
+                  if "K" not in p["flags"] and float(p["pts_time"]) > 1)
+    raw = bytearray(output.read_bytes())
+    pos, size = int(packet["pos"]), int(packet["size"])
+    raw[pos + 10:pos + size] = b"\xff" * (size - 10)
+    output.write_bytes(raw)
+    return output
+
+
+def test_technical_qc_rejects_real_decoder_damage(damaged_video: Path) -> None:
+    result = TechnicalQC().execute({"input_path": str(damaged_video)})
+    assert result.success, result.error
+    assert result.data["passed"] is False
+    assert result.data["status"] == "fail"
+    assert any(issue["code"] == "technical_check_failed" for issue in result.data["issues"])
+
+
+def test_muapi_validator_rejects_real_decoder_damage(damaged_video: Path) -> None:
+    from tools.video.muapi_video import MuapiVideo
+
+    with pytest.raises((ValueError, subprocess.CalledProcessError)):
+        MuapiVideo()._validate_download(damaged_video)
+
+
+def test_muapi_validator_accepts_decodable_video_and_rejects_html(tmp_path: Path) -> None:
+    from tools.video.muapi_video import MuapiVideo
+
+    _require_ffmpeg()
+    output = tmp_path / "candidate.mp4"
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+        "testsrc2=s=160x90:r=24:d=1", "-c:v", "libx264", str(output),
+    ], check=True, capture_output=True, timeout=30)
+    tool = MuapiVideo()
+    result = tool._validate_download(output)
+    assert result["video_width"] == 160
+    assert result["duration_seconds"] == 1
+    output.write_bytes(b"<html>upstream error</html>")
+    with pytest.raises((ValueError, subprocess.CalledProcessError)):
+        tool._validate_download(output)
+
+
+def test_technical_qc_handles_real_silence_at_one_sample(tmp_path: Path) -> None:
+    _require_ffmpeg()
+    output = tmp_path / "one-sample.mov"
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=160x90:r=30:d=4",
+        "-f", "lavfi", "-i", r"aevalsrc=if(eq(n\,0)\,0.5\,0):s=48000:d=4",
+        "-c:v", "libx264", "-c:a", "pcm_s16le", str(output),
+    ], check=True, capture_output=True, timeout=30)
+    result = TechnicalQC().execute({"input_path": str(output), "checks": ["silence"]})
+    assert result.success, result.error
+    assert result.data["metrics"]["silence_segments"] == [
+        {"start_seconds": 0.0, "end_seconds": 4.0, "duration_seconds": 4.0}
+    ]

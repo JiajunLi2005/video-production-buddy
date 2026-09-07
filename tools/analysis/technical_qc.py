@@ -18,6 +18,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from lib.ffmpeg_validation import STRICT_DECODE_ARGS, require_clean_decode
 from tools.base_tool import (
     BaseTool,
     Determinism,
@@ -34,7 +35,7 @@ from tools.output_paths import (
 )
 
 
-_NUMBER_PATTERN = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)"
+_NUMBER_PATTERN = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?(?![\w.+-])"
 
 DEFAULT_CHECKS = [
     "container",
@@ -615,6 +616,7 @@ class TechnicalQC(BaseTool):
                     "-hide_banner",
                     "-nostats",
                     "-nostdin",
+                    *STRICT_DECODE_ARGS,
                     "-i",
                     str(input_path),
                     "-map",
@@ -628,6 +630,7 @@ class TechnicalQC(BaseTool):
                 ],
                 timeout=600,
             )
+            require_clean_decode(result.stderr or "")
         except Exception as exc:
             for check in checks:
                 self._record_failure(check, exc, issues, checks_skipped)
@@ -686,6 +689,7 @@ class TechnicalQC(BaseTool):
                     "-hide_banner",
                     "-nostats",
                     "-nostdin",
+                    *STRICT_DECODE_ARGS,
                     "-i",
                     str(input_path),
                     "-map",
@@ -699,6 +703,7 @@ class TechnicalQC(BaseTool):
                 ],
                 timeout=600,
             )
+            require_clean_decode(result.stderr or "")
         except Exception as exc:
             for check in checks:
                 self._record_failure(check, exc, issues, checks_skipped)
@@ -720,13 +725,16 @@ class TechnicalQC(BaseTool):
         if "audio_loudness" in checks:
             loudness = self._parse_loudness(output)
             metrics["audio_loudness"] = loudness
-            if loudness["integrated_lufs"] is None:
-                reason = "FFmpeg completed but reported no integrated loudness"
+            if loudness["integrated_lufs"] is None or (
+                loudness["true_peak_dbfs"] is None
+                and self._loudness_value(output, "Peak", "dBFS") != -math.inf
+            ):
+                reason = "FFmpeg completed but reported incomplete loudness/true-peak evidence"
                 self._skip(checks_skipped, "audio_loudness", reason)
                 issues.append(
                     self._issue(
                         "audio_loudness_unavailable",
-                        "warning",
+                        "error",
                         reason + ".",
                         check="audio_loudness",
                     )
@@ -1074,46 +1082,48 @@ class TechnicalQC(BaseTool):
                 end = start + durations[index]
             else:
                 end = max(media_duration, start)
-            segment_duration = (
-                durations[index]
-                if index < len(durations)
-                else max(end - start, 0.0)
-            )
+            if not math.isfinite(start) or not math.isfinite(end):
+                raise ValueError(f"Invalid {prefix} interval timestamp")
+            start = round(min(max(start, 0.0), media_duration), 3)
+            end = round(min(max(end, start), media_duration), 3)
             segments.append(
                 {
-                    "start_seconds": round(max(start, 0.0), 3),
-                    "end_seconds": round(max(end, start), 3),
-                    "duration_seconds": round(max(segment_duration, 0.0), 3),
+                    "start_seconds": start,
+                    "end_seconds": end,
+                    "duration_seconds": round(end - start, 3),
                 }
             )
         return segments
 
     @staticmethod
-    def _parse_loudness(output: str) -> dict[str, float | None]:
-        integrated_values = re.findall(
-            rf"\bI:\s*({_NUMBER_PATTERN})\s+LUFS",
-            output,
-        )
-        range_values = re.findall(
-            rf"\bLRA:\s*({_NUMBER_PATTERN})\s+LU",
-            output,
-        )
-        peak_values = re.findall(
-            rf"\bPeak:\s*({_NUMBER_PATTERN})\s+dBFS",
-            output,
-        )
+    def _loudness_value(output: str, label: str, unit: str) -> float | None:
+        # A progress sample must never stand in for a missing/invalid final
+        # measurement. Include non-finite tokens so they cannot be skipped in
+        # favor of an earlier finite match.
+        summary = output.rsplit("Summary:", 1)[-1]
+        values = re.findall(rf"\b{label}:\s*(\S+)\s+{unit}\b", summary)
+        try:
+            if not values:
+                return None
+            value = float(values[-1])
+            # Only the explicit digital-silence token is meaningful infinity;
+            # numeric overflow such as -1e999 is missing measurement evidence.
+            if not math.isfinite(value) and values[-1].lower() != "-inf":
+                return None
+            return value
+        except ValueError:
+            return None
+
+    @classmethod
+    def _parse_loudness(cls, output: str) -> dict[str, float | None]:
+        def final_finite(label: str, unit: str) -> float | None:
+            value = cls._loudness_value(output, label, unit)
+            return round(value, 2) if value is not None and math.isfinite(value) else None
+
         return {
-            "integrated_lufs": (
-                round(float(integrated_values[-1]), 2)
-                if integrated_values
-                else None
-            ),
-            "loudness_range_lu": (
-                round(float(range_values[-1]), 2) if range_values else None
-            ),
-            "true_peak_dbfs": (
-                round(float(peak_values[-1]), 2) if peak_values else None
-            ),
+            "integrated_lufs": final_finite("I", "LUFS"),
+            "loudness_range_lu": final_finite("LRA", "LU"),
+            "true_peak_dbfs": final_finite("Peak", "dBFS"),
         }
 
     @staticmethod
